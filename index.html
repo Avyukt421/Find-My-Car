@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Find My Car</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root {
+    --bg: #060a0f;
+    --panel: rgba(19, 27, 38, 0.72);
+    --panel-solid: #131b26;
+    --panel-raised: rgba(28, 39, 53, 0.85);
+    --border: rgba(63, 184, 175, 0.16);
+    --border-strong: rgba(63, 184, 175, 0.4);
+    --text-primary: #EAF2F8;
+    --text-muted: #6E84A0;
+    --teal: #3FE0D0;
+    --teal-dim: rgba(63, 224, 208, 0.12);
+    --amber: #F0BB4C;
+    --amber-dim: rgba(240, 187, 76, 0.12);
+    --danger: #FF6259;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    padding: clamp(16px, 4vw, 48px);
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* ---- Ambient techy background: grid + glow orbs + scanline ---- */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(63,224,208,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(63,224,208,0.05) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(circle at 12% 8%, rgba(63,224,208,0.10), transparent 42%),
+      radial-gradient(circle at 88% 92%, rgba(240,187,76,0.08), transparent 42%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { max-width: 740px; margin: 0 auto; position: relative; z-index: 1; }
+
+  /* ---- Header ---- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 22px;
+    margin-bottom: 26px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .radar-icon {
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(63,224,208,0.18), rgba(63,224,208,0.04));
+    border: 1px solid var(--border-strong);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    box-shadow: 0 0 18px rgba(63,224,208,0.15), inset 0 0 12px rgba(63,224,208,0.08);
+  }
+
+  .radar-icon svg { width: 24px; height: 24px; }
+
+  .radar-icon .sweep {
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: conic-gradient(from 0deg, rgba(63,224,208,0.5), transparent 30%);
+    animation: sweep 3s linear infinite;
+    opacity: 0.5;
+  }
+
+  @keyframes sweep {
+    to { transform: rotate(360deg); }
+  }
+
+  .title-block { flex: 1; min-width: 0; }
+
+  header h1 {
+    font-family: var(--font-display);
+    font-size: clamp(1.25rem, 4vw, 1.5rem);
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+    background: linear-gradient(120deg, #ffffff 30%, var(--teal) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  header span.sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 6px 1px var(--teal);
+    animation: pulse-dot 2s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  /* ---- Panels ---- */
+  .panel {
+    background: var(--panel);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+  }
+
+  .panel h2 {
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel h2::before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: var(--teal);
+    border-radius: 2px;
+    box-shadow: 0 0 6px var(--teal);
+  }
+
+  /* ---- Add car form ---- */
+  .add-form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .add-form input {
+    flex: 1;
+    min-width: 130px;
+    background: rgba(6, 10, 15, 0.5);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 14px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .add-form input:focus {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 3px var(--teal-dim);
+  }
+
+  .add-form input::placeholder { color: var(--text-muted); }
+
+  .add-form button {
+    background: linear-gradient(135deg, var(--teal), #29b3a5);
+    color: #04211d;
+    border: none;
+    border-radius: 9px;
+    padding: 0 20px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 4px 14px rgba(63,224,208,0.25);
+  }
+
+  .add-form button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(63,224,208,0.35);
+  }
+
+  .add-form button:active { transform: translateY(0); }
+
+  /* ---- Car cards ---- */
+  .car-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .car-card {
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    position: relative;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .car-card:hover {
+    border-color: var(--border-strong);
+  }
+
+  /* corner bracket accents, HUD style */
+  .car-card::before, .car-card::after {
+    content: '';
+    position: absolute;
+    width: 10px; height: 10px;
+    border-color: var(--teal);
+    opacity: 0.6;
+  }
+  .car-card::before {
+    top: 6px; left: 6px;
+    border-top: 2px solid var(--teal);
+    border-left: 2px solid var(--teal);
+    border-radius: 3px 0 0 0;
+  }
+  .car-card::after {
+    bottom: 6px; right: 6px;
+    border-bottom: 2px solid var(--teal);
+    border-right: 2px solid var(--teal);
+    border-radius: 0 0 3px 0;
+  }
+
+  .car-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .car-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+
+  .car-plate {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--amber);
+    letter-spacing: 0.08em;
+    margin-top: 6px;
+    padding: 3px 8px;
+    background: var(--amber-dim);
+    border: 1px solid rgba(240,187,76,0.3);
+    border-radius: 5px;
+  }
+
+  .car-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    opacity: 0.4;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .car-remove:hover { opacity: 1; color: var(--danger); }
+
+  .car-status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    letter-spacing: 0.03em;
+  }
+
+  .car-status::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .car-status.saved { color: var(--teal); }
+  .car-status.saved::before {
+    background: var(--teal);
+    box-shadow: 0 0 6px var(--teal);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .car-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    flex: 1;
+    min-width: 130px;
+    border: 1px solid var(--border);
+    background: rgba(6,10,15,0.4);
+    color: var(--text-primary);
+    border-radius: 9px;
+    padding: 11px 14px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+  }
+
+  .btn:hover:not(:disabled) {
+    border-color: var(--teal);
+    background: var(--teal-dim);
+  }
+
+  .btn.primary {
+    background: linear-gradient(135deg, var(--amber), #d99e2e);
+    border-color: transparent;
+    color: #1a1406;
+    box-shadow: 0 4px 14px rgba(240,187,76,0.2);
+  }
+
+  .btn.primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  .btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .empty-state {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-family: var(--font-mono);
+    text-align: center;
+    padding: 30px 0;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+
+  /* ---- Map panel ---- */
+  #map-panel { display: none; }
+  #map-panel.active { display: block; animation: fadeSlideIn 0.35s ease; }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  #map-panel .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  #map-panel h2 { margin: 0; }
+
+  .close-map {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 7px;
+    padding: 6px 12px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    transition: all 0.15s ease;
+  }
+
+  .close-map:hover { border-color: var(--danger); color: var(--danger); }
+
+  #map {
+    width: 100%;
+    height: 320px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel-raised);
+    filter: saturate(0.9) brightness(0.95);
+  }
+
+  .map-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 14px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .map-meta .stat {
+    background: rgba(6,10,15,0.4);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    flex: 1;
+    min-width: 130px;
+  }
+
+  .map-meta .stat-label {
+    display: block;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 3px;
+  }
+
+  .map-meta .stat-value {
+    color: var(--teal);
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .status-msg {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 12px;
+  }
+
+  .status-msg.error { color: var(--danger); }
+
+  footer {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 30px;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+  }
+
+  /* map markers */
+  .car-marker-wrap {
+    position: relative;
+    width: 20px; height: 20px;
+  }
+  .car-marker-dot {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--amber);
+    border: 2px solid #1a1406;
+    box-shadow: 0 0 10px rgba(240,187,76,0.8);
+    position: absolute;
+    top: 2px; left: 2px;
+  }
+
+  .me-marker-wrap {
+    position: relative;
+    width: 26px; height: 26px;
+  }
+  .me-marker-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(63,224,208,0.25);
+    animation: ring-pulse 1.8s ease-out infinite;
+  }
+  .me-marker-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--teal);
+    border: 2px solid #06211f;
+    box-shadow: 0 0 10px rgba(63,224,208,0.9);
+    position: absolute;
+    top: 6px; left: 6px;
+  }
+
+  @keyframes ring-pulse {
+    0% { transform: scale(0.4); opacity: 0.8; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="radar-icon">
+      <div class="sweep"></div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#3FE0D0" stroke-width="1.8">
+        <circle cx="12" cy="12" r="3" fill="#3FE0D0" stroke="none"/>
+        <circle cx="12" cy="12" r="7.5" stroke-opacity="0.7"/>
+        <circle cx="12" cy="12" r="11" stroke-opacity="0.35"/>
+      </svg>
+    </div>
+    <div class="title-block">
+      <h1>Find My Car</h1>
+      <span class="sub"><span class="status-dot"></span>Register once &middot; locate anytime</span>
+    </div>
+  </header>
+
+  <section class="panel">
+    <h2>Register a Vehicle</h2>
+    <div class="add-form">
+      <input type="text" id="car-name" placeholder="Nickname (e.g. My Swift)" maxlength="30">
+      <input type="text" id="car-plate" placeholder="License plate" maxlength="20">
+      <button id="add-car-btn">+ Add Car</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Your Fleet</h2>
+    <div class="car-list" id="car-list"></div>
+  </section>
+
+  <section class="panel" id="map-panel">
+    <div class="panel-head">
+      <h2 id="map-title">Route to car</h2>
+      <button class="close-map" id="close-map-btn">✕ CLOSE</button>
+    </div>
+    <div id="map"></div>
+    <div class="map-meta">
+      <div class="stat">
+        <span class="stat-label">Distance</span>
+        <span class="stat-value" id="meta-distance">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Parked</span>
+        <span class="stat-value" id="meta-time">—</span>
+      </div>
+    </div>
+    <div class="status-msg" id="map-status"></div>
+  </section>
+
+  <footer>DATA STORED LOCALLY IN THIS BROWSER &middot; LOCATION USED ONLY ON DEVICE</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+  const STORE_KEY = 'findmycar:v1';
+
+  function loadCars() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('Failed to load cars', e);
+      return [];
+    }
+  }
+
+  function saveCars() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(cars));
+    } catch (e) {
+      console.error('Failed to save cars', e);
+    }
+  }
+
+  let cars = loadCars();
+  let map = null;
+  let carMarker = null;
+  let meMarker = null;
+  let routeLine = null;
+
+  const carList = document.getElementById('car-list');
+  const mapPanel = document.getElementById('map-panel');
+  const mapTitle = document.getElementById('map-title');
+  const mapStatus = document.getElementById('map-status');
+  const metaDistance = document.getElementById('meta-distance');
+  const metaTime = document.getElementById('meta-time');
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  function formatDistance(m) {
+    if (m < 1000) return Math.round(m) + ' m';
+    return (m / 1000).toFixed(2) + ' km';
+  }
+
+  function timeAgo(ts) {
+    const diff = Date.now() - ts;
+    const mins = Math.round(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + ' min ago';
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + ' hr ago';
+    const days = Math.round(hrs / 24);
+    return days + ' day' + (days > 1 ? 's' : '') + ' ago';
+  }
+
+  function renderCars() {
+    carList.innerHTML = '';
+    if (cars.length === 0) {
+      carList.innerHTML = '<div class="empty-state">No vehicles registered yet — add one above to get started.</div>';
+      return;
+    }
+    cars.forEach(car => {
+      const card = document.createElement('div');
+      card.className = 'car-card';
+
+      const top = document.createElement('div');
+      top.className = 'car-card-top';
+      const info = document.createElement('div');
+      info.innerHTML = `<div class="car-name">${escapeHtml(car.name)}</div>` +
+        (car.plate ? `<span class="car-plate">${escapeHtml(car.plate)}</span>` : '');
+      const remove = document.createElement('button');
+      remove.className = 'car-remove';
+      remove.setAttribute('aria-label', 'Remove car');
+      remove.textContent = '✕';
+      remove.addEventListener('click', () => {
+        cars = cars.filter(c => c.id !== car.id);
+        saveCars();
+        renderCars();
+      });
+      top.appendChild(info);
+      top.appendChild(remove);
+
+      const status = document.createElement('div');
+      if (car.location) {
+        status.className = 'car-status saved';
+        status.textContent = `Parked ${timeAgo(car.location.timestamp)}`;
+      } else {
+        status.className = 'car-status';
+        status.textContent = 'Not parked yet';
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'car-actions';
+
+      const parkBtn = document.createElement('button');
+      parkBtn.className = 'btn primary';
+      parkBtn.textContent = "I'm Parking Here";
+      parkBtn.addEventListener('click', () => parkCar(car.id, parkBtn));
+
+      const findBtn = document.createElement('button');
+      findBtn.className = 'btn';
+      findBtn.textContent = 'Find My Car';
+      findBtn.disabled = !car.location;
+      findBtn.addEventListener('click', () => openMap(car.id));
+
+      actions.appendChild(parkBtn);
+      actions.appendChild(findBtn);
+
+      card.appendChild(top);
+      card.appendChild(status);
+      card.appendChild(actions);
+      carList.appendChild(card);
+    });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function addCar() {
+    const nameInput = document.getElementById('car-name');
+    const plateInput = document.getElementById('car-plate');
+    const name = nameInput.value.trim();
+    const plate = plateInput.value.trim();
+    if (!name) { nameInput.focus(); return; }
+    cars.push({ id: Date.now() + Math.random(), name, plate, location: null });
+    nameInput.value = '';
+    plateInput.value = '';
+    saveCars();
+    renderCars();
+  }
+
+  document.getElementById('add-car-btn').addEventListener('click', addCar);
+  document.getElementById('car-name').addEventListener('keydown', e => { if (e.key === 'Enter') addCar(); });
+  document.getElementById('car-plate').addEventListener('keydown', e => { if (e.key === 'Enter') addCar(); });
+
+  function parkCar(carId, btnEl) {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported on this device/browser.');
+      return;
+    }
+    const originalText = btnEl.textContent;
+    btnEl.textContent = 'Getting location...';
+    btnEl.disabled = true;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const car = cars.find(c => c.id === carId);
+        if (car) {
+          car.location = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            timestamp: Date.now()
+          };
+          saveCars();
+          renderCars();
+        }
+      },
+      err => {
+        btnEl.textContent = originalText;
+        btnEl.disabled = false;
+        alert('Could not get your location: ' + err.message + '\n\nMake sure location access is allowed for this page.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  function openMap(carId) {
+    const car = cars.find(c => c.id === carId);
+    if (!car || !car.location) return;
+
+    mapTitle.textContent = `Route to ${car.name}`;
+    metaTime.textContent = timeAgo(car.location.timestamp);
+    mapStatus.textContent = '';
+    mapPanel.classList.add('active');
+    mapPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    if (!map) {
+      map = L.map('map');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+    }
+    setTimeout(() => map.invalidateSize(), 200);
+
+    const carIcon = L.divIcon({
+      className: '',
+      html: '<div class="car-marker-wrap"><div class="car-marker-dot"></div></div>',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+    const meIcon = L.divIcon({
+      className: '',
+      html: '<div class="me-marker-wrap"><div class="me-marker-ring"></div><div class="me-marker-dot"></div></div>',
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+
+    if (carMarker) map.removeLayer(carMarker);
+    carMarker = L.marker([car.location.lat, car.location.lng], { icon: carIcon })
+      .addTo(map).bindPopup(`🚗 ${escapeHtml(car.name)}`);
+
+    map.setView([car.location.lat, car.location.lng], 16);
+
+    if (!navigator.geolocation) {
+      mapStatus.textContent = 'Geolocation not supported — showing car location only.';
+      mapStatus.className = 'status-msg error';
+      return;
+    }
+
+    mapStatus.textContent = 'Getting your current location...';
+    mapStatus.className = 'status-msg';
+
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+
+        if (meMarker) map.removeLayer(meMarker);
+        meMarker = L.marker([me.lat, me.lng], { icon: meIcon })
+          .addTo(map).bindPopup('📍 You');
+
+        const dist = haversine(me.lat, me.lng, car.location.lat, car.location.lng);
+        metaDistance.textContent = formatDistance(dist);
+
+        const bounds = L.latLngBounds([me.lat, me.lng], [car.location.lat, car.location.lng]);
+        map.fitBounds(bounds, { padding: [40, 40] });
+
+        drawRoute(me, car.location);
+      },
+      err => {
+        mapStatus.textContent = 'Could not get your current location: ' + err.message;
+        mapStatus.className = 'status-msg error';
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  async function drawRoute(from, to) {
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+    try {
+      const url = `https://router.project-osrm.org/route/v1/foot/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.routes && data.routes[0]) {
+        const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        routeLine = L.polyline(coords, { color: '#F0BB4C', weight: 4, opacity: 0.9 }).addTo(map);
+        mapStatus.textContent = 'Walking route loaded.';
+      } else {
+        throw new Error('No route found');
+      }
+    } catch (e) {
+      routeLine = L.polyline([[from.lat, from.lng], [to.lat, to.lng]], {
+        color: '#F0BB4C', weight: 3, opacity: 0.75, dashArray: '6 8'
+      }).addTo(map);
+      mapStatus.textContent = 'Route service unavailable — showing straight-line direction instead.';
+    }
+  }
+
+  document.getElementById('close-map-btn').addEventListener('click', () => {
+    mapPanel.classList.remove('active');
+  });
+
+  renderCars();
+</script>
+</body>
+</html>
