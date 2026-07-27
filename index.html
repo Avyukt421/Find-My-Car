@@ -142,7 +142,7 @@
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
     padding: 22px;
     margin-bottom: 18px;
     position: relative;
@@ -222,7 +222,7 @@
   .car-card {
     background: var(--panel-raised);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 4px;
     padding: 18px;
     position: relative;
     transition: border-color 0.2s ease, transform 0.2s ease;
