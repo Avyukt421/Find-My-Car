@@ -17,9 +17,9 @@
     --border-strong: rgba(63, 184, 175, 0.4);
     --text-primary: #EAF2F8;
     --text-muted: #6E84A0;
-    --teal: #3FE0D0;
+    --teal: #A78BFA;
     --teal-dim: rgba(63, 224, 208, 0.12);
-    --amber: #F0BB4C;
+    --amber: #F472B6;
     --amber-dim: rgba(240, 187, 76, 0.12);
     --danger: #FF6259;
     --font-display: 'Black Ops One', sans-serif;
@@ -201,7 +201,7 @@
   .add-form input::placeholder { color: var(--text-muted); }
 
   .add-form button {
-    background: linear-gradient(135deg, var(--teal), #29b3a5);
+    background: linear-gradient(135deg, var(--teal), #7C3AED);
     color: #04211d;
     border: none;
     border-radius: 9px;
@@ -295,7 +295,7 @@
   .btn:hover:not(:disabled) { border-color: var(--teal); background: var(--teal-dim); }
 
   .btn.primary {
-    background: linear-gradient(135deg, var(--amber), #d99e2e);
+    background: linear-gradient(135deg, var(--amber), #DB2777);
     border-color: transparent;
     color: #1a1406;
     box-shadow: 0 4px 14px rgba(240,187,76,0.2);
@@ -360,8 +360,8 @@
   <header>
     <div class="radar-icon">
       <div class="sweep"></div>
-      <svg viewBox="0 0 24 24" fill="none" stroke="#3FE0D0" stroke-width="1.8">
-        <circle cx="12" cy="12" r="3" fill="#3FE0D0" stroke="none"/>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="1.8">
+        <circle cx="12" cy="12" r="3" fill="#A78BFA" stroke="none"/>
         <circle cx="12" cy="12" r="7.5" stroke-opacity="0.7"/>
         <circle cx="12" cy="12" r="11" stroke-opacity="0.35"/>
       </svg>
@@ -647,7 +647,7 @@
 
     function drawStraightLine(reason) {
       routeLine = L.polyline([[from.lat, from.lng], [to.lat, to.lng]], {
-        color: '#F0BB4C', weight: 3, opacity: 0.75, dashArray: '6 8'
+        color: '#F472B6', weight: 3, opacity: 0.75, dashArray: '6 8'
       }).addTo(map);
       mapStatus.textContent = reason;
     }
@@ -674,7 +674,7 @@
       }
 
       const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-      routeLine = L.polyline(coords, { color: '#F0BB4C', weight: 4, opacity: 0.9 }).addTo(map);
+      routeLine = L.polyline(coords, { color: '#F472B6', weight: 4, opacity: 0.9 }).addTo(map);
       mapStatus.textContent = 'Walking route loaded.';
     } catch (e) {
       drawStraightLine('Route service unavailable — showing straight-line direction instead.');
