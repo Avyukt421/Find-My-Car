@@ -314,6 +314,40 @@
   .car-status.saved { color: var(--teal); }
   .car-status.saved::before { background: var(--teal); box-shadow: 0 0 6px var(--teal); animation: pulse-dot 2s ease-in-out infinite; }
 
+  .note-row {
+    margin-bottom: 14px;
+  }
+  .note-input {
+    width: 100%;
+    background: rgba(6,10,15,0.35);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .note-input::placeholder { color: var(--text-muted); font-style: italic; }
+  .note-input:focus {
+    border-color: var(--teal);
+    border-style: solid;
+    background: rgba(6,10,15,0.5);
+  }
+  html[data-theme="light"] .note-input { background: rgba(0,0,0,0.02); }
+  html[data-theme="light"] .note-input:focus { background: rgba(0,0,0,0.03); }
+
+  .note-saved-tick {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--teal);
+    margin-left: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .note-saved-tick.show { opacity: 1; }
+
   .car-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   .btn {
@@ -452,6 +486,7 @@
       <div class="stat"><span class="stat-label">Distance</span><span class="stat-value" id="meta-distance">—</span></div>
       <div class="stat"><span class="stat-label">Parked</span><span class="stat-value" id="meta-time">—</span></div>
     </div>
+    <div class="status-msg" id="map-note" style="display:none;"></div>
     <div class="status-msg" id="map-status"></div>
   </section>
 
@@ -486,6 +521,7 @@
   const mapPanel = document.getElementById('map-panel');
   const mapTitle = document.getElementById('map-title');
   const mapStatus = document.getElementById('map-status');
+  const mapNote = document.getElementById('map-note');
   const metaDistance = document.getElementById('meta-distance');
   const metaTime = document.getElementById('meta-time');
 
@@ -540,6 +576,36 @@
       if (car.location) { status.className = 'car-status saved'; status.textContent = `Parked ${timeAgo(car.location.timestamp)}`; }
       else { status.className = 'car-status'; status.textContent = 'Not parked yet'; }
 
+      let noteRow = null;
+      if (car.location) {
+        noteRow = document.createElement('div');
+        noteRow.className = 'note-row';
+        const noteInput = document.createElement('input');
+        noteInput.type = 'text';
+        noteInput.className = 'note-input';
+        noteInput.placeholder = 'Add a note (e.g. Level 3, near the lift)';
+        noteInput.maxLength = 80;
+        noteInput.value = car.location.note || '';
+
+        const tick = document.createElement('span');
+        tick.className = 'note-saved-tick';
+        tick.textContent = '✓ saved';
+
+        let saveTimeout = null;
+        noteInput.addEventListener('input', () => {
+          clearTimeout(saveTimeout);
+          saveTimeout = setTimeout(() => {
+            car.location.note = noteInput.value.trim();
+            saveCars();
+            tick.classList.add('show');
+            setTimeout(() => tick.classList.remove('show'), 1200);
+          }, 500);
+        });
+
+        noteRow.appendChild(noteInput);
+        noteRow.appendChild(tick);
+      }
+
       const actions = document.createElement('div');
       actions.className = 'car-actions';
 
@@ -559,6 +625,7 @@
 
       card.appendChild(top);
       card.appendChild(status);
+      if (noteRow) card.appendChild(noteRow);
       card.appendChild(actions);
       carList.appendChild(card);
     });
@@ -639,6 +706,12 @@
     mapTitle.textContent = `Route to ${car.name}`;
     metaTime.textContent = timeAgo(car.location.timestamp);
     mapStatus.textContent = '';
+    if (car.location.note) {
+      mapNote.textContent = '📝 ' + car.location.note;
+      mapNote.style.display = 'block';
+    } else {
+      mapNote.style.display = 'none';
+    }
     mapPanel.classList.add('active');
     mapPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
