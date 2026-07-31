@@ -348,6 +348,42 @@
   }
   .note-saved-tick.show { opacity: 1; }
 
+  .stale-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: var(--amber-dim);
+    border: 1px solid rgba(244,114,182,0.3);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  .stale-text {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--amber);
+  }
+  .stale-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .stale-btn {
+    border: none;
+    border-radius: 6px;
+    padding: 6px 11px;
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+  .stale-btn.confirm {
+    background: var(--amber);
+    color: #1a1406;
+  }
+  .stale-btn.clear {
+    background: transparent;
+    border: 1px solid rgba(244,114,182,0.4);
+    color: var(--amber);
+  }
+
   .car-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   .btn {
@@ -576,6 +612,47 @@
       if (car.location) { status.className = 'car-status saved'; status.textContent = `Parked ${timeAgo(car.location.timestamp)}`; }
       else { status.className = 'car-status'; status.textContent = 'Not parked yet'; }
 
+      const STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
+      let staleBanner = null;
+      if (car.location) {
+        const lastConfirmed = car.location.confirmedAt || car.location.timestamp;
+        const isStale = (Date.now() - lastConfirmed) > STALE_MS;
+        if (isStale) {
+          staleBanner = document.createElement('div');
+          staleBanner.className = 'stale-banner';
+
+          const text = document.createElement('span');
+          text.className = 'stale-text';
+          text.textContent = `⚠ Parked ${timeAgo(car.location.timestamp)} — still here?`;
+
+          const actionsWrap = document.createElement('div');
+          actionsWrap.className = 'stale-actions';
+
+          const confirmBtn = document.createElement('button');
+          confirmBtn.className = 'stale-btn confirm';
+          confirmBtn.textContent = 'Yes, still here';
+          confirmBtn.addEventListener('click', () => {
+            car.location.confirmedAt = Date.now();
+            saveCars();
+            renderCars();
+          });
+
+          const clearBtn = document.createElement('button');
+          clearBtn.className = 'stale-btn clear';
+          clearBtn.textContent = 'Clear it';
+          clearBtn.addEventListener('click', () => {
+            car.location = null;
+            saveCars();
+            renderCars();
+          });
+
+          actionsWrap.appendChild(confirmBtn);
+          actionsWrap.appendChild(clearBtn);
+          staleBanner.appendChild(text);
+          staleBanner.appendChild(actionsWrap);
+        }
+      }
+
       let noteRow = null;
       if (car.location) {
         noteRow = document.createElement('div');
@@ -625,6 +702,7 @@
 
       card.appendChild(top);
       card.appendChild(status);
+      if (staleBanner) card.appendChild(staleBanner);
       if (noteRow) card.appendChild(noteRow);
       card.appendChild(actions);
       carList.appendChild(card);
