@@ -384,6 +384,43 @@
     color: var(--amber);
   }
 
+  .streak-strip {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .streak-card {
+    flex: 1;
+    background: var(--panel);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .streak-emoji {
+    font-size: 26px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .streak-number {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    line-height: 1;
+  }
+  .streak-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 3px;
+  }
+
   .car-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   .btn {
@@ -489,6 +526,23 @@
       </svg>
     </button>
   </header>
+
+  <div class="streak-strip">
+    <div class="streak-card">
+      <div class="streak-emoji">🔥</div>
+      <div>
+        <div class="streak-number" id="streak-count">0</div>
+        <div class="streak-label">Day Streak</div>
+      </div>
+    </div>
+    <div class="streak-card">
+      <div class="streak-emoji">📍</div>
+      <div>
+        <div class="streak-number" id="month-count">0</div>
+        <div class="streak-label">Uses This Month</div>
+      </div>
+    </div>
+  </div>
 
   <section class="panel" id="insecure-banner" style="display:none; border-color: rgba(255,98,89,0.4);">
     <h2 style="color: var(--danger);">⚠ Location Will Not Work Here</h2>
@@ -754,6 +808,70 @@
     return lines.join('\n');
   }
 
+  // ---------- Streak tracking ----------
+  const USAGE_KEY = 'findmycar:usage';
+
+  function getLocalDateStr(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function loadUsageDates() {
+    try {
+      const raw = localStorage.getItem(USAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  }
+
+  function recordUsageToday() {
+    try {
+      const today = getLocalDateStr(new Date());
+      const dates = loadUsageDates();
+      if (!dates.includes(today)) {
+        dates.push(today);
+        localStorage.setItem(USAGE_KEY, JSON.stringify(dates));
+      }
+    } catch (e) { /* ignore */ }
+    renderStreak();
+  }
+
+  function computeStreak(dates) {
+    const dateSet = new Set(dates);
+    let streak = 0;
+    let cursor = new Date();
+    // If not used today yet, start checking from yesterday instead,
+    // so the streak doesn't zero out before the day is even over.
+    if (!dateSet.has(getLocalDateStr(cursor))) {
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    while (dateSet.has(getLocalDateStr(cursor))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+
+  function computeMonthCount(dates) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    return dates.filter(d => {
+      const parts = d.split('-').map(Number);
+      return parts[0] === y && (parts[1] - 1) === m;
+    }).length;
+  }
+
+  function renderStreak() {
+    const dates = loadUsageDates();
+    const streakEl = document.getElementById('streak-count');
+    const monthEl = document.getElementById('month-count');
+    if (streakEl) streakEl.textContent = computeStreak(dates);
+    if (monthEl) monthEl.textContent = computeMonthCount(dates);
+  }
+
   function parkCar(carId, btnEl) {
     if (!navigator.geolocation) { alert('Geolocation is not supported on this device/browser.'); return; }
     const originalText = btnEl.textContent;
@@ -766,6 +884,7 @@
           car.location = { lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now() };
           saveCars();
           renderCars();
+          recordUsageToday();
         }
       },
       err => {
@@ -780,6 +899,8 @@
   function openMap(carId) {
     const car = cars.find(c => c.id === carId);
     if (!car || !car.location) return;
+
+    recordUsageToday();
 
     mapTitle.textContent = `Route to ${car.name}`;
     metaTime.textContent = timeAgo(car.location.timestamp);
@@ -911,6 +1032,7 @@
   });
 
   renderCars();
+  renderStreak();
 </script>
 </body>
 </html>
