@@ -492,6 +492,52 @@
   .me-marker-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--teal); border: 2px solid #06211f; box-shadow: 0 0 10px rgba(63,224,208,0.9); position: absolute; top: 6px; left: 6px; }
   @keyframes ring-pulse { 0% { transform: scale(0.4); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }
 
+  /* ---- Toast notifications ---- */
+  #toast-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(92vw, 420px);
+    pointer-events: none;
+  }
+  .toast-item {
+    pointer-events: auto;
+    background: var(--panel-solid);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 13px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+    animation: toast-in 0.25s ease;
+    backdrop-filter: blur(10px);
+  }
+  .toast-item.leaving { animation: toast-out 0.2s ease forwards; }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes toast-out {
+    to { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  }
+  .toast-icon { font-size: 17px; line-height: 1.3; flex-shrink: 0; }
+  .toast-body { flex: 1; min-width: 0; }
+  .toast-title { font-family: var(--font-display); font-size: 0.8rem; color: var(--text-primary); margin-bottom: 3px; }
+  .toast-msg { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); line-height: 1.5; white-space: pre-line; }
+  .toast-item.error { border-color: rgba(255,98,89,0.4); }
+  .toast-item.success { border-color: rgba(167,139,250,0.4); }
+  .toast-close {
+    background: none; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 0.9rem; opacity: 0.5; flex-shrink: 0; padding: 0;
+  }
+  .toast-close:hover { opacity: 1; }
+
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
@@ -501,6 +547,8 @@
 </style>
 </head>
 <body>
+<div id="toast-container"></div>
+
 <div class="wrap">
 
   <header>
@@ -614,6 +662,47 @@
   const mapNote = document.getElementById('map-note');
   const metaDistance = document.getElementById('meta-distance');
   const metaTime = document.getElementById('meta-time');
+
+  // ---------- Toast notifications ----------
+  const toastContainer = document.getElementById('toast-container');
+
+  function showToast({ title, message, type = 'error', duration = 6000 }) {
+    const item = document.createElement('div');
+    item.className = 'toast-item ' + type;
+
+    const icon = document.createElement('div');
+    icon.className = 'toast-icon';
+    icon.textContent = type === 'error' ? '⚠' : type === 'success' ? '✓' : 'ℹ';
+
+    const body = document.createElement('div');
+    body.className = 'toast-body';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'toast-title';
+    titleEl.textContent = title;
+    const msgEl = document.createElement('div');
+    msgEl.className = 'toast-msg';
+    msgEl.textContent = message || '';
+    body.appendChild(titleEl);
+    if (message) body.appendChild(msgEl);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Dismiss');
+
+    function dismiss() {
+      item.classList.add('leaving');
+      setTimeout(() => item.remove(), 200);
+    }
+    closeBtn.addEventListener('click', dismiss);
+
+    item.appendChild(icon);
+    item.appendChild(body);
+    item.appendChild(closeBtn);
+    toastContainer.appendChild(item);
+
+    if (duration > 0) setTimeout(dismiss, duration);
+  }
 
   function haversine(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -873,7 +962,10 @@
   }
 
   function parkCar(carId, btnEl) {
-    if (!navigator.geolocation) { alert('Geolocation is not supported on this device/browser.'); return; }
+    if (!navigator.geolocation) {
+      showToast({ title: 'Not supported', message: 'Geolocation is not supported on this device/browser.', type: 'error' });
+      return;
+    }
     const originalText = btnEl.textContent;
     btnEl.textContent = 'Getting location...';
     btnEl.disabled = true;
@@ -885,12 +977,13 @@
           saveCars();
           renderCars();
           recordUsageToday();
+          showToast({ title: 'Spot saved', message: `${car.name}'s location has been saved.`, type: 'success', duration: 3500 });
         }
       },
       err => {
         btnEl.textContent = originalText;
         btnEl.disabled = false;
-        alert('Could not get your location:\n\n' + describeGeoError(err));
+        showToast({ title: 'Could not get your location', message: describeGeoError(err), type: 'error' });
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
